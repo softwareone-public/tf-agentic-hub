@@ -1,1 +1,196 @@
 # tf-agentic-hub
+
+Central automation hub that keeps a fleet of Terraform module repositories on current,
+validated dependency versions. It implements the **MultiRepoOps** pattern of
+[GitHub Agentic Workflows (gh-aw)](https://github.com/github/gh-aw): all automation lives in this
+repository and the target repositories only receive pull requests – no workflow, secret or
+configuration changes are required in them.
+
+## Big picture
+
+```mermaid
+flowchart LR
+    subgraph hub["tf-agentic-hub"]
+        cron([Weekly schedule / manual dispatch]) --> orch[Orchestrator<br/>terraform-dependency-orchestrator.yml]
+        cfg[(config/targets.json)] --> orch
+        orch -->|workflow_dispatch<br/>target_repo| worker[Agentic worker<br/>terraform-dependency-update.md]
+        std[[shared/terraform-coding-standards.md]] --> worker
+    end
+    worker -->|draft PR| a[tf-azurerm-key-vault]
+    worker -->|draft PR| b[tf-azurerm-function-app]
+    worker -->|draft PR| c[tf-azurerm-storage-account]
+```
+
+1. **Orchestrator** (`.github/workflows/terraform-dependency-orchestrator.yml`) – a plain, deterministic
+   GitHub Actions workflow. It reads `config/targets.json` and dispatches one worker run per target
+   repository. No AI is involved in the fan-out.
+2. **Worker** (`.github/workflows/terraform-dependency-update.md`, compiled to `.lock.yml`) – an
+   agentic workflow that, for exactly one target repository:
+   1. checks out the target repository,
+   2. inventories every Terraform **module reference** (Git `?ref=` tags and Registry `version`s) and the
+      **`hashicorp/azurerm` provider** constraint – in code *and* documentation snippets,
+   3. resolves the latest versions from GitHub releases and the Terraform Registry,
+   4. upgrades outdated references and the azurerm constraint (following the official azurerm upgrade
+      guide when a major version is crossed),
+   5. validates every root/example configuration with `terraform fmt`, `terraform init -backend=false`
+      and `terraform validate`,
+   6. reviews the code against the shared **Terraform coding standards**,
+   7. updates `README.md`, example READMEs and `CHANGELOG.md`,
+   8. opens a single **draft pull request** prefixed with `[terraform-deps]` in the target repository –
+      or reports a `noop` when everything is current or validation cannot be made green.
+3. **Coding standards** (`.github/workflows/shared/terraform-coding-standards.md`) – a shared prompt
+   component imported by the worker. Each standard is either auto-fixed in the PR (`fix`) or listed
+   as a finding in the PR body (`report`).
+
+### Coding standards
+
+| ID     | Standard | Action |
+|--------|----------|--------|
+| TF-001 | `terraform fmt` clean | fix |
+| TF-002 | `required_version` and pinned `required_providers` | fix |
+| TF-003 | Module sources pinned to release tags / registry versions | fix |
+| TF-004 | Variables have `description` and `type` | fix |
+| TF-005 | Outputs have `description`, secrets are `sensitive` | fix |
+| TF-006 | No hard-coded secrets or IDs, sensitive variables marked | report |
+| TF-007 | Taggable resources receive a `tags` variable | report |
+| TF-008 | Secure defaults (TLS 1.2, HTTPS only, no public access, purge protection, RBAC) | report |
+| TF-009 | Standard module layout incl. `examples/` | report |
+| TF-010 | README documents usage, inputs, outputs and versions | fix |
+
+The standards file also contains an optional **README tone** instruction (TF-011) that is
+commented out by default. HTML comments are stripped from the prompt at runtime, so the instruction
+is inactive until you remove the surrounding `<!--` and `-->` markers.
+
+### Guardrails
+
+- The agent runs in the gh-aw sandbox with a network firewall limited to the `defaults`, `github`
+  and `terraform` ecosystems and an allow-listed shell (`terraform`, `git`, `find`, `ls`, `cat`,
+  `grep`, `sed`, `jq`, `diff` and the gh-aw default safe commands).
+- The agent has **no write token**. Changes are handed to the separate `safe_outputs` job, which is
+  the only job allowed to push a branch and open the pull request (max. one draft PR per run,
+  `.terraform/`, state and plan files are excluded from the patch).
+- The worker refuses to run for repositories that are not listed in `config/targets.json`.
+- Pull requests are always drafts and require human review.
+
+## Repository layout
+
+```text
+.
+├── config/
+│   └── targets.json                              # Target repositories (single source of truth)
+└── .github/workflows/
+    ├── terraform-dependency-orchestrator.yml     # Deterministic fan-out (schedule / manual)
+    ├── terraform-dependency-update.md            # Agentic worker – source (edit this)
+    ├── terraform-dependency-update.lock.yml      # Agentic worker – compiled (generated, do not edit)
+    ├── shared/terraform-coding-standards.md      # Shared coding standards prompt
+    └── agentics-maintenance.yml                  # Generated by gh-aw (do not edit)
+```
+
+## Setup
+
+### 1. Prerequisites
+
+- GitHub CLI and the gh-aw extension: `gh extension install github/gh-aw` (only needed to compile and operate the workflows)
+- GitHub Actions enabled for this repository.
+
+### 2. Secrets
+
+Create the following repository secrets (**Settings → Secrets and variables → Actions**). Prefer
+fine-grained PATs or GitHub App tokens scoped to **only** the target repositories.
+
+| Secret | Permissions on target repositories | Used for |
+|--------|------------------------------------|----------|
+| `COPILOT_GITHUB_TOKEN` | Fine-grained PAT with the *Copilot Requests* permission | AI engine (GitHub Copilot) |
+| `GH_AW_TARGET_REPO_READ_TOKEN` | `Contents: Read`, `Pull requests: Read`, `Metadata: Read` | Checkout of the target repository and GitHub tools (releases, tags, open PRs) |
+| `GH_AW_CROSS_REPO_PAT` | `Contents: Read & write`, `Pull requests: Read & write`, `Issues: Read & write` | Pushing the branch and opening the PR (safe outputs) |
+
+```bash
+gh aw secrets bootstrap   # interactive check of all secrets required by the compiled workflows
+# or set them individually
+gh secret set COPILOT_GITHUB_TOKEN
+gh secret set GH_AW_TARGET_REPO_READ_TOKEN
+gh secret set GH_AW_CROSS_REPO_PAT
+```
+
+If module sources reference *private* repositories, the read token must also have
+`Contents: Read` on those repositories.
+
+### 3. Labels (optional)
+
+The pull requests are labelled `dependencies`, `terraform` and `automated`. Create these labels
+in the target repositories if you want them applied.
+
+### 4. Register target repositories
+
+Add or remove repositories in `config/targets.json`:
+
+```json
+{
+  "repositories": [
+    "softwareone-public/tf-azurerm-key-vault",
+    "softwareone-public/tf-azurerm-function-app",
+    "softwareone-public/tf-azurerm-storage-account"
+  ]
+}
+```
+
+No recompilation is needed after changing the target list.
+
+## Operation
+
+| Task | Command |
+|------|---------|
+| Run for all targets | `gh workflow run terraform-dependency-orchestrator.yml` |
+| Run for all targets, minor/patch upgrades only | `gh workflow run terraform-dependency-orchestrator.yml -f allow_major_upgrades=false` |
+| Run for a single target | `gh aw run terraform-dependency-update --raw-field target_repo=softwareone-public/tf-azurerm-key-vault` |
+| Check status | `gh aw status` |
+| Inspect a run | `gh aw logs terraform-dependency-update` / `gh aw audit <run-id>` |
+
+The orchestrator also runs automatically every Monday at 06:00 UTC.
+
+Each run produces one of the following outcomes per target repository:
+
+- **Draft PR** `[terraform-deps] Update Terraform dependencies (...)` with a version change table,
+  migration notes, validation results, the coding standards review and the updated documentation.
+- **No-op** – everything is current, an identical `[terraform-deps]` PR is already open, or
+  validation could not be made green (the reason is visible in the run summary).
+
+## Customisation
+
+| Change | Where | Recompile? |
+|--------|-------|------------|
+| Target repositories | `config/targets.json` | No |
+| Agent instructions (prompt body) | `terraform-dependency-update.md` (below the frontmatter) | **Yes** – `gh aw compile` |
+| Coding standards | `shared/terraform-coding-standards.md` | **Yes** – `gh aw compile` |
+| Triggers, permissions, tools, network, safe outputs | Frontmatter of `terraform-dependency-update.md` | **Yes** – `gh aw compile` |
+| Schedule / fan-out | `terraform-dependency-orchestrator.yml` | No |
+
+### Enable the pirate README tone
+
+1. Open `.github/workflows/shared/terraform-coding-standards.md`.
+2. Remove the `<!--` and `-->` lines around the **README tone** section (TF-011).
+3. Run `gh aw compile --strict`, commit and run the orchestrator. The next pull requests rewrite
+   the README prose in pirate language while leaving code blocks, tables and identifiers untouched.
+
+Restore the comment markers (and recompile) to turn it off again.
+
+### Compile after changing a workflow `.md` file
+
+```bash
+gh aw compile --strict
+git add .github/workflows/
+git commit -m "Recompile agentic workflows"
+```
+
+Always commit the `.md` source together with the generated `.lock.yml`; the lock file records
+hashes of the sources and gh-aw flags stale lock files at runtime.
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---------|--------------|
+| `validate_target` job fails | `target_repo` is not listed in `config/targets.json`. |
+| Checkout of the target repository fails | `GH_AW_TARGET_REPO_READ_TOKEN` missing or not scoped to the repository. |
+| `terraform init` fails with network errors | A module source points to a host outside the allowed network ecosystems – add it under `network.allowed` and recompile. |
+| PR creation fails / falls back to an issue | `GH_AW_CROSS_REPO_PAT` lacks write access, or the target base branch differs from this repository's default branch (set `safe-outputs.create-pull-request.base-branch`). |
+| Runs cancel each other | Ensure the worker keeps `concurrency.job-discriminator` set to the target repository. |
