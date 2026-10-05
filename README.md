@@ -64,7 +64,8 @@ is inactive until you remove the surrounding `<!--` and `-->` markers.
 ### Guardrails
 
 - The agent runs in the gh-aw sandbox with a network firewall limited to the `defaults`, `github`
-  and `terraform` ecosystems and a restricted shell (`terraform`, `git`, read-only utilities).
+  and `terraform` ecosystems and an allow-listed shell (`terraform`, `git`, `find`, `ls`, `cat`,
+  `grep`, `sed`, `jq`, `diff` and the gh-aw default safe commands).
 - The agent has **no write token**. Changes are handed to the separate `safe_outputs` job, which is
   the only job allowed to push a branch and open the pull request (max. one draft PR per run,
   `.terraform/`, state and plan files are excluded from the patch).
@@ -159,8 +160,8 @@ Each run produces one of the following outcomes per target repository:
 | Change | Where | Recompile? |
 |--------|-------|------------|
 | Target repositories | `config/targets.json` | No |
-| Agent instructions (prompt body) | `terraform-dependency-update.md` (below the frontmatter) | No |
-| Coding standards | `shared/terraform-coding-standards.md` | No |
+| Agent instructions (prompt body) | `terraform-dependency-update.md` (below the frontmatter) | **Yes** – `gh aw compile` |
+| Coding standards | `shared/terraform-coding-standards.md` | **Yes** – `gh aw compile` |
 | Triggers, permissions, tools, network, safe outputs | Frontmatter of `terraform-dependency-update.md` | **Yes** – `gh aw compile` |
 | Schedule / fan-out | `terraform-dependency-orchestrator.yml` | No |
 
@@ -168,12 +169,12 @@ Each run produces one of the following outcomes per target repository:
 
 1. Open `.github/workflows/shared/terraform-coding-standards.md`.
 2. Remove the `<!--` and `-->` lines around the **README tone** section (TF-011).
-3. Commit and run the orchestrator. The next pull requests rewrite the README prose in pirate
-   language while leaving code blocks, tables and identifiers untouched.
+3. Run `gh aw compile --strict`, commit and run the orchestrator. The next pull requests rewrite
+   the README prose in pirate language while leaving code blocks, tables and identifiers untouched.
 
-Restore the comment markers to turn it off again.
+Restore the comment markers (and recompile) to turn it off again.
 
-### Compile after frontmatter changes
+### Compile after changing a workflow `.md` file
 
 ```bash
 gh aw compile --strict
@@ -181,7 +182,8 @@ git add .github/workflows/
 git commit -m "Recompile agentic workflows"
 ```
 
-Always commit the `.md` source together with the generated `.lock.yml`.
+Always commit the `.md` source together with the generated `.lock.yml`; the lock file records
+hashes of the sources and gh-aw flags stale lock files at runtime.
 
 ## Troubleshooting
 

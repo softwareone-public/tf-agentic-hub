@@ -177,11 +177,16 @@ target versions, call `noop` referencing that pull request and stop.
 
 ## Step 4 – Validate
 
-Run the following in the repository root **and** in every directory under `examples/` and `tests/`
-that contains Terraform files:
+Format the whole repository once from the root:
 
 ```bash
 terraform fmt -recursive
+```
+
+Then initialise and validate the repository root **and** every directory under `examples/` and
+`tests/` that contains Terraform files (`-upgrade` makes Terraform select the new versions):
+
+```bash
 terraform -chdir=<dir> init -backend=false -upgrade -input=false
 terraform -chdir=<dir> validate
 ```
