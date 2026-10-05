@@ -1,0 +1,7 @@
+{
+  "repositories": [
+    "softwareone-public/tf-azurerm-key-vault",
+    "softwareone-public/tf-azurerm-function-app",
+    "softwareone-public/tf-azurerm-storage-account"
+  ]
+}
