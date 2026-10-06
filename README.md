@@ -66,7 +66,7 @@ is inactive until you remove the surrounding `<!--` and `-->` markers.
 - The agent runs in the gh-aw sandbox with a network firewall limited to the `defaults`, `github`
   and `terraform` ecosystems and an allow-listed shell (`terraform`, `git`, `find`, `ls`, `cat`,
   `grep`, `sed`, `jq`, `diff` and the gh-aw default safe commands).
-- The agent has **no write token**. Changes are handed to the separate `safe_outputs` job, which is
+- The agent has **no repository write token**. Changes are handed to the separate `safe_outputs` job, which is
   the only job allowed to push a branch and open the pull request (max. one draft PR per run,
   `.terraform/`, state and plan files are excluded from the patch).
 - The worker refuses to run for repositories that are not listed in `config/targets.json`.
@@ -92,6 +92,11 @@ is inactive until you remove the surrounding `<!--` and `-->` markers.
 
 - GitHub CLI and the gh-aw extension: `gh extension install github/gh-aw` (only needed to compile and operate the workflows)
 - GitHub Actions enabled for this repository.
+- The organization must have a Copilot subscription and centralized billing enabled under
+  **Organization → Settings → Copilot → Policies → Copilot CLI → "Allow use of Copilot CLI billed to the organization"**.
+  Inference consumes the organization's AI Credits; ensure its billing/budget permits usage.
+  See the official [authentication](https://github.github.com/gh-aw/reference/auth/#copilot-requests-write-permission)
+  and [billing](https://github.github.com/gh-aw/reference/billing/) guidance.
 
 ### 2. GitHub App and secrets
 
@@ -102,7 +107,6 @@ Create the following repository variable and secrets in the hub repository
 |------|------|------------------|
 | Variable | `APP_CLIENT_ID` | GitHub App Client ID for target repository access |
 | Secret | `APP_PRIVATE_KEY` | Entire downloaded PEM private key, including BEGIN/END lines, for the App |
-| Secret | `COPILOT_GITHUB_TOKEN` | Fine-grained PAT with the *Copilot Requests* permission for the AI engine (GitHub Copilot), unchanged |
 
 Give the GitHub App repository permissions `Contents: Read & write`,
 `Pull requests: Read & write`, `Issues: Read & write` and `Metadata: Read`.
@@ -116,14 +120,19 @@ tokens at runtime; do not store installation tokens as secrets. Read operations 
 tokens, while safe outputs receive the permissions needed to push branches and open PRs.
 The configured `repositories: ["*"]` means repositories available to this App installation,
 **not all organization repositories**. Keep the private key only in Secrets, never in Variables
-or source code. The App does not replace the separate `COPILOT_GITHUB_TOKEN`.
+or source code.
+
+Copilot inference uses the built-in Actions `GITHUB_TOKEN` (`${{ github.token }}`) with
+`copilot-requests: write`, billed to the organization. No Copilot PAT is required: the App
+authorizes repository operations, **not inference**. The worker no longer uses an existing
+`COPILOT_GITHUB_TOKEN` secret; an administrator may remove it if no other workflows need it.
+Do not replace the Actions inference token with an App installation token.
 
 ```bash
 gh aw secrets bootstrap   # interactive check of all secrets required by the compiled workflows
 # set the variable and secrets individually
 gh variable set APP_CLIENT_ID
 gh secret set APP_PRIVATE_KEY < /path/to/downloaded-private-key.pem
-gh secret set COPILOT_GITHUB_TOKEN
 ```
 
 ### 3. Labels (optional)
@@ -195,6 +204,8 @@ git commit -m "Recompile agentic workflows"
 
 Always commit the `.md` source together with the generated `.lock.yml`; the lock file records
 hashes of the sources and gh-aw flags stale lock files at runtime.
+The organization-billed worker is compiled with gh-aw v0.89.21, which supports
+`copilot-requests: write`; no compiler upgrade is needed for this authentication mode.
 
 ## Troubleshooting
 
@@ -202,6 +213,7 @@ hashes of the sources and gh-aw flags stale lock files at runtime.
 |---------|--------------|
 | `validate_target` job fails | `target_repo` is not listed in `config/targets.json`. |
 | Checkout of the target repository fails | `APP_CLIENT_ID` variable or `APP_PRIVATE_KEY` secret missing/invalid, or the App is not installed on the target with `Contents: Read`. |
+| Copilot inference is denied | Verify the organization's Copilot subscription, centralized CLI billing policy and available budget, and recompile/commit the worker with `copilot-requests: write`. The GitHub App cannot authorize inference. |
 | `terraform init` fails with network errors | A module source points to a host outside the allowed network ecosystems – add it under `network.allowed` and recompile. |
 | PR creation fails / falls back to an issue | The App lacks installation access or required write permissions on the target, or the target base branch differs from this repository's default branch (set `safe-outputs.create-pull-request.base-branch`). |
 | Runs cancel each other | Ensure the worker keeps `concurrency.job-discriminator` set to the target repository. |
