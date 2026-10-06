@@ -60,7 +60,16 @@ jobs:
 
 checkout:
   repository: ${{ github.event.inputs.target_repo }}
-  github-token: ${{ secrets.GH_AW_TARGET_REPO_READ_TOKEN }}
+  github-app:
+    client-id: ${{ vars.APP_CLIENT_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
+    owner: softwareone-public
+    repositories: ["*"]
+  safe-outputs-github-app:
+    client-id: ${{ vars.APP_CLIENT_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
+    owner: softwareone-public
+    repositories: ["*"]
   current: true
 
 network:
@@ -71,7 +80,11 @@ network:
 
 tools:
   github:
-    github-token: ${{ secrets.GH_AW_TARGET_REPO_READ_TOKEN }}
+    github-app:
+      client-id: ${{ vars.APP_CLIENT_ID }}
+      private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      owner: softwareone-public
+      repositories: ["*"]
     toolsets: [repos, pull_requests]
   web-fetch:
   edit:
@@ -95,7 +108,11 @@ steps:
     run: sudo install -m 0755 "$(command -v terraform)" /usr/local/bin/terraform && terraform version
 
 safe-outputs:
-  github-token: ${{ secrets.GH_AW_CROSS_REPO_PAT }}
+  github-app:
+    client-id: ${{ vars.APP_CLIENT_ID }}
+    private-key: ${{ secrets.APP_PRIVATE_KEY }}
+    owner: softwareone-public
+    repositories: ["*"]
   create-pull-request:
     target-repo: ${{ github.event.inputs.target_repo }}
     title-prefix: "[terraform-deps] "

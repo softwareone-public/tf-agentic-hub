@@ -93,27 +93,38 @@ is inactive until you remove the surrounding `<!--` and `-->` markers.
 - GitHub CLI and the gh-aw extension: `gh extension install github/gh-aw` (only needed to compile and operate the workflows)
 - GitHub Actions enabled for this repository.
 
-### 2. Secrets
+### 2. GitHub App and secrets
 
-Create the following repository secrets (**Settings → Secrets and variables → Actions**). Prefer
-fine-grained PATs or GitHub App tokens scoped to **only** the target repositories.
+Create the following repository variable and secrets in the hub repository
+(**Settings → Secrets and variables → Actions**):
 
-| Secret | Permissions on target repositories | Used for |
-|--------|------------------------------------|----------|
-| `COPILOT_GITHUB_TOKEN` | Fine-grained PAT with the *Copilot Requests* permission | AI engine (GitHub Copilot) |
-| `GH_AW_TARGET_REPO_READ_TOKEN` | `Contents: Read`, `Pull requests: Read`, `Metadata: Read` | Checkout of the target repository and GitHub tools (releases, tags, open PRs) |
-| `GH_AW_CROSS_REPO_PAT` | `Contents: Read & write`, `Pull requests: Read & write`, `Issues: Read & write` | Pushing the branch and opening the PR (safe outputs) |
+| Type | Name | Value / used for |
+|------|------|------------------|
+| Variable | `APP_CLIENT_ID` | GitHub App Client ID for target repository access |
+| Secret | `APP_PRIVATE_KEY` | Entire downloaded PEM private key, including BEGIN/END lines, for the App |
+| Secret | `COPILOT_GITHUB_TOKEN` | Fine-grained PAT with the *Copilot Requests* permission for the AI engine (GitHub Copilot), unchanged |
+
+Give the GitHub App repository permissions `Contents: Read & write`,
+`Pull requests: Read & write`, `Issues: Read & write` and `Metadata: Read`.
+Install it in `softwareone-public` using **Only select repositories**, selecting only the target
+repositories and any private module-source repositories that must be readable
+(`Contents: Read` is required for those sources).
+
+The worker uses gh-aw's native `github-app` authentication for checkout, GitHub tools and safe
+outputs, including the safe-output target checkout. gh-aw generates short-lived installation
+tokens at runtime; do not store installation tokens as secrets. Read operations use read-scoped
+tokens, while safe outputs receive the permissions needed to push branches and open PRs.
+The configured `repositories: ["*"]` means repositories available to this App installation,
+**not all organization repositories**. Keep the private key only in Secrets, never in Variables
+or source code. The App does not replace the separate `COPILOT_GITHUB_TOKEN`.
 
 ```bash
 gh aw secrets bootstrap   # interactive check of all secrets required by the compiled workflows
-# or set them individually
+# set the variable and secrets individually
+gh variable set APP_CLIENT_ID
+gh secret set APP_PRIVATE_KEY < /path/to/downloaded-private-key.pem
 gh secret set COPILOT_GITHUB_TOKEN
-gh secret set GH_AW_TARGET_REPO_READ_TOKEN
-gh secret set GH_AW_CROSS_REPO_PAT
 ```
-
-If module sources reference *private* repositories, the read token must also have
-`Contents: Read` on those repositories.
 
 ### 3. Labels (optional)
 
@@ -190,7 +201,7 @@ hashes of the sources and gh-aw flags stale lock files at runtime.
 | Symptom | Likely cause |
 |---------|--------------|
 | `validate_target` job fails | `target_repo` is not listed in `config/targets.json`. |
-| Checkout of the target repository fails | `GH_AW_TARGET_REPO_READ_TOKEN` missing or not scoped to the repository. |
+| Checkout of the target repository fails | `APP_CLIENT_ID` variable or `APP_PRIVATE_KEY` secret missing/invalid, or the App is not installed on the target with `Contents: Read`. |
 | `terraform init` fails with network errors | A module source points to a host outside the allowed network ecosystems – add it under `network.allowed` and recompile. |
-| PR creation fails / falls back to an issue | `GH_AW_CROSS_REPO_PAT` lacks write access, or the target base branch differs from this repository's default branch (set `safe-outputs.create-pull-request.base-branch`). |
+| PR creation fails / falls back to an issue | The App lacks installation access or required write permissions on the target, or the target base branch differs from this repository's default branch (set `safe-outputs.create-pull-request.base-branch`). |
 | Runs cancel each other | Ensure the worker keeps `concurrency.job-discriminator` set to the target repository. |
