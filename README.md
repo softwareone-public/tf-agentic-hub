@@ -27,11 +27,11 @@ flowchart LR
 2. **Worker** (`.github/workflows/terraform-dependency-update.md`, compiled to `.lock.yml`) – an
    agentic workflow that, for exactly one target repository:
    1. checks out the target repository,
-   2. inventories every Terraform **module reference** (Git `?ref=` tags and Registry `version`s) and the
-      **`hashicorp/azurerm` provider** constraint – in code *and* documentation snippets,
-   3. resolves the latest versions from GitHub releases and the Terraform Registry,
-   4. upgrades outdated references and the azurerm constraint (following the official azurerm upgrade
-      guide when a major version is crossed),
+   2. inventories every Terraform **module reference** (Git `?ref=` tags and Registry `version`s)
+      in code *and* documentation snippets,
+   3. resolves the latest module versions from GitHub releases and the Terraform Registry,
+   4. upgrades outdated module references while intentionally **skipping** `hashicorp/azurerm`
+      provider updates,
    5. validates every root/example configuration with `terraform fmt`, `terraform init -backend=false`
       and `terraform validate`,
    6. reviews the code against the shared **Terraform coding standards**,
@@ -171,7 +171,7 @@ The orchestrator also runs automatically every Monday at 06:00 UTC.
 
 Each run produces one of the following outcomes per target repository:
 
-- **Draft PR** `[terraform-deps] Update Terraform dependencies (...)` with a version change table,
+- **Draft PR** `[terraform-deps] Update Terraform modules (...)` with a version change table,
   migration notes, validation results, the coding standards review and the updated documentation.
 - **No-op** – everything is current, an identical `[terraform-deps]` PR is already open, or
   validation could not be made green (the reason is visible in the run summary).
@@ -214,7 +214,7 @@ The organization-billed worker is compiled with gh-aw v0.89.21, which supports
 |---------|--------------|
 | `validate_target` job fails | `target_repo` is not listed in `config/targets.json`. |
 | Checkout of the target repository fails | `APP_CLIENT_ID` variable or `APP_PRIVATE_KEY` secret missing/invalid, or the App is not installed on the target with `Contents: Read`. |
-| Copilot inference is denied | Verify the organization's Copilot subscription, centralized CLI billing policy and available budget, and recompile/commit the worker with `copilot-requests: write`. The GitHub App cannot authorize inference. |
+| Copilot inference is denied | Verify the organization's Copilot subscription, centralized CLI billing policy and available budget, and recompile/commit the worker with `copilot-requests: write`. |
 | `terraform init` fails with network errors | A module source points to a host outside the allowed network ecosystems – add it under `network.allowed` and recompile. |
-| PR creation fails / falls back to an issue | The App lacks installation access or required write permissions on the target, or the target base branch differs from this repository's default branch (set `safe-outputs.create-pull-request.base-branch`). |
+| PR creation fails / falls back to an issue | The App lacks installation access or required write permissions on the target, or the target base branch differs from this repository's default branch assumptions in the target automation. |
 | Runs cancel each other | Ensure the worker keeps `concurrency.job-discriminator` set to the target repository. |
