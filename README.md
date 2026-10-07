@@ -119,8 +119,9 @@ tokens at runtime; do not store installation tokens as secrets. Read operations 
 tokens, while safe outputs receive the permissions needed to push branches and open PRs.
 Every App token is scoped with `repositories: ["${{ github.event.inputs.target_repo }}"]`, i.e.
 only the single target repository of the run, which `validate_target` has already checked against
-`config/targets.json`. Repository names are never hardcoded in the workflow. Keep the private key
-only in Secrets, never in Variables or source code.
+`config/targets.json`. Repository names are never hardcoded in the workflow. Because of this scoping,
+the agent's GitHub tools cannot read other private repositories (for example private module
+sources) through the App. Keep the private key only in Secrets, never in Variables or source code.
 
 Copilot inference uses the built-in Actions `GITHUB_TOKEN` (`${{ github.token }}`) with
 `copilot-requests: write`, billed to the organization. No Copilot PAT is required: the App
