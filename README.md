@@ -110,17 +110,17 @@ Create the following repository variable and secrets in the hub repository
 
 Give the GitHub App repository permissions `Contents: Read & write`,
 `Pull requests: Read & write`, `Issues: Read & write` and `Metadata: Read`.
-Install it in `softwareone-public` using **Only select repositories**, selecting only the target
-repositories and any private module-source repositories that must be readable
-(`Contents: Read` is required for those sources).
+Install it in `softwareone-public` using **Only select repositories**, selecting the repositories
+listed in `config/targets.json`.
 
 The worker uses gh-aw's native `github-app` authentication for checkout, GitHub tools and safe
 outputs, including the safe-output target checkout. gh-aw generates short-lived installation
 tokens at runtime; do not store installation tokens as secrets. Read operations use read-scoped
 tokens, while safe outputs receive the permissions needed to push branches and open PRs.
-The configured `repositories: ["*"]` means repositories available to this App installation,
-**not all organization repositories**. Keep the private key only in Secrets, never in Variables
-or source code.
+Every App token is scoped with `repositories: ["${{ github.event.inputs.target_repo }}"]`, i.e.
+only the single target repository of the run, which `validate_target` has already checked against
+`config/targets.json`. Repository names are never hardcoded in the workflow. Keep the private key
+only in Secrets, never in Variables or source code.
 
 Copilot inference uses the built-in Actions `GITHUB_TOKEN` (`${{ github.token }}`) with
 `copilot-requests: write`, billed to the organization. No Copilot PAT is required: the App
