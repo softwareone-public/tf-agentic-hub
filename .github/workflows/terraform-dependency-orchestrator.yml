@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       allow_major_upgrades:
-        description: "Allow major version upgrades of modules and the azurerm provider."
+        description: "Allow major version upgrades of Terraform modules."
         required: false
         type: boolean
         default: true

@@ -1,7 +1,7 @@
 ---
 description: |
-  Scans a single Terraform repository for outdated module references and an
-  outdated azurerm provider, upgrades and validates them, reviews the code
+  Scans a single Terraform repository for outdated module references, upgrades
+  and validates them, reviews the code
   against the shared Terraform coding standards, refreshes the documentation
   and opens a draft pull request in that repository.
 
@@ -13,7 +13,7 @@ on:
         required: true
         type: string
       allow_major_upgrades:
-        description: "Allow major version upgrades of modules and the azurerm provider."
+        description: "Allow major version upgrades of Terraform modules."
         required: false
         type: boolean
         default: true
@@ -153,8 +153,9 @@ Record:
    - Git: `git::https://github.com/<owner>/<repo>.git//<path>?ref=<tag>` and `github.com/<owner>/<repo>//<path>?ref=<tag>`
    - Terraform Registry: `<namespace>/<name>/<provider>` with a `version` argument
    - Local paths (`./`, `../`) – ignore, they are always current.
-2. **Provider constraints** – every `required_providers` entry, with special attention to
-   `hashicorp/azurerm`, plus `required_version` and any committed `.terraform.lock.hcl` files.
+2. **Terraform configuration** – record `required_version` and committed `.terraform.lock.hcl`
+  files for validation context. Review provider requirements only as part of the shared coding
+  standards; do not resolve their latest versions.
 
 ## Step 2 – Resolve the latest versions
 
@@ -162,19 +163,17 @@ Record:
   and pick the highest non-prerelease semantic version. If the repository has no releases, use
   the highest semantic version tag.
 - **Registry modules**: fetch `https://registry.terraform.io/v1/modules/<namespace>/<name>/<provider>/versions`.
-- **azurerm provider**: fetch `https://registry.terraform.io/v1/providers/hashicorp/azurerm/versions`
-  and pick the highest non-prerelease version.
 
 If major upgrades are **not** allowed, choose the highest version within the currently referenced
-major version instead.
+major version for each module instead.
 
-A reference is **outdated** when its pinned version (or the lower bound of its constraint) is lower
-than the version selected above. If nothing is outdated and no `fix` action from the coding
-standards applies, call `noop` with a short summary of the versions you checked and stop.
+A module reference is **outdated** when its pinned version is lower than the version selected above.
+If no module is outdated and no `fix` action from the coding standards applies, call `noop` with a
+short summary of the module versions you checked and stop.
 
 Before changing anything, use the GitHub tools to look for an open pull request in the target
 repository whose title starts with `[terraform-deps]`. If it already proposes exactly the same
-target versions, call `noop` referencing that pull request and stop.
+module versions, call `noop` referencing that pull request and stop.
 
 ## Step 3 – Apply the upgrade
 
@@ -182,16 +181,8 @@ target versions, call `noop` referencing that pull request and stop.
    in documentation snippets so code and docs stay in sync. For major upgrades, read the
    release notes / `CHANGELOG.md` of the upgraded module and adapt renamed, removed or newly
    required inputs and outputs.
-2. **azurerm provider** – raise the constraint while keeping the existing style of the repository:
-   - `~> X.Y` becomes `~> <latest major>.<latest minor>`
-   - `>= X.Y.Z` / `>= X.Y.Z, < N.0` raises the lower bound to the latest version (and the upper bound to the next major when crossing a major)
-   - Apply the same constraint in the root module and in every example / test configuration.
-   - When crossing a major version, follow the official azurerm upgrade guide
-     (`https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/guides/<major>.0-upgrade-guide`)
-     and migrate renamed or removed arguments and resources, for example `enable_*` → `*_enabled`
-     argument renames and the `subscription_id` requirement in `provider "azurerm"` blocks of examples.
-3. If a `.terraform.lock.hcl` is committed, refresh it with `terraform -chdir=<dir> init -upgrade -backend=false`.
-   Do not add lock files to directories that did not have one.
+2. Do not upgrade provider versions. Change provider requirements only when needed for a coding-
+  standards fix, and leave provider selections and `.terraform.lock.hcl` files unchanged.
 
 ## Step 4 – Validate
 
@@ -202,14 +193,15 @@ terraform fmt -recursive
 ```
 
 Then initialise and validate the repository root **and** every directory under `examples/` and
-`tests/` that contains Terraform files (`-upgrade` makes Terraform select the new versions):
+`tests/` that contains Terraform files:
 
 ```bash
-terraform -chdir=<dir> init -backend=false -upgrade -input=false
+terraform -chdir=<dir> init -backend=false -input=false -lockfile=readonly
 terraform -chdir=<dir> validate
 ```
 
-- Fix every error introduced by the upgrade and rerun until validation succeeds.
+- Fix errors caused by module updates and rerun until validation succeeds. Do not upgrade providers
+  as part of validation.
 - Never stage `.terraform/` folders, state files or plan files.
 - If validation still fails after reasonable effort, do **not** open a pull request with broken
   code. Instead call `noop` explaining the blocking error, the attempted versions and the failing
@@ -224,8 +216,8 @@ actions in the same change set and collect all findings for the pull request bod
 
 Update the documentation so it reflects the new state:
 
-- `README.md` (root and examples): module usage snippets, `?ref=` / `version` values, provider and
-  Terraform version requirements tables, inputs/outputs tables when they changed. If the README
+- `README.md` (root and examples): module usage snippets, `?ref=` / `version` values, and
+  inputs/outputs tables when they changed. If the README
   contains `<!-- BEGIN_TF_DOCS -->` / `<!-- END_TF_DOCS -->` markers, keep the markers and update
   the content between them in the same terraform-docs format.
 - `CHANGELOG.md` (only if it exists): add the changes under an `Unreleased` section following the
@@ -236,10 +228,10 @@ Update the documentation so it reflects the new state:
 Commit all changes on a branch named `terraform-deps/update-dependencies` and create **one**
 pull request with:
 
-- **Title**: `Update Terraform dependencies (azurerm <old> → <new>, <n> module reference(s))`
+- **Title**: `Update Terraform modules (<n> module reference(s))`
 - **Body**:
   1. **Summary** – one paragraph describing what was updated and why.
-  2. **Version changes** – table with `Dependency`, `Type` (module / provider), `From`, `To`, `Files`.
+  2. **Module version changes** – table with `Module`, `From`, `To`, `Files`.
   3. **Breaking changes & migrations** – what was adapted for major upgrades (or "None").
   4. **Validation** – the commands you ran per directory and their result.
   5. **Coding standards review** – the table described in the coding standards section.
