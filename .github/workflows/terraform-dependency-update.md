@@ -65,12 +65,12 @@ checkout:
     client-id: ${{ vars.APP_CLIENT_ID }}
     private-key: ${{ secrets.APP_PRIVATE_KEY }}
     owner: softwareone-public
-    repositories: ["*"]
+    repositories: ["${{ github.event.inputs.target_repo }}"]
   safe-outputs-github-app:
     client-id: ${{ vars.APP_CLIENT_ID }}
     private-key: ${{ secrets.APP_PRIVATE_KEY }}
     owner: softwareone-public
-    repositories: ["*"]
+    repositories: ["${{ github.event.inputs.target_repo }}"]
   current: true
 
 network:
@@ -85,7 +85,7 @@ tools:
       client-id: ${{ vars.APP_CLIENT_ID }}
       private-key: ${{ secrets.APP_PRIVATE_KEY }}
       owner: softwareone-public
-      repositories: ["*"]
+      repositories: ["${{ github.event.inputs.target_repo }}"]
     toolsets: [repos, pull_requests]
   web-fetch:
   edit:
@@ -113,7 +113,7 @@ safe-outputs:
     client-id: ${{ vars.APP_CLIENT_ID }}
     private-key: ${{ secrets.APP_PRIVATE_KEY }}
     owner: softwareone-public
-    repositories: ["*"]
+    repositories: ["${{ github.event.inputs.target_repo }}"]
   create-pull-request:
     target-repo: ${{ github.event.inputs.target_repo }}
     title-prefix: "[terraform-deps] "
