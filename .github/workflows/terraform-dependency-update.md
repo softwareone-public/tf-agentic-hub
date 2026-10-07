@@ -30,7 +30,6 @@ timeout-minutes: 30
 
 permissions:
   contents: read
-  issues: read
   pull-requests: read
   copilot-requests: write
 
@@ -121,12 +120,24 @@ safe-outputs:
     draft: true
     max: 1
     if-no-changes: ignore
+    fallback-as-issue: false
     excluded-files:
       - "**/.terraform/**"
       - "**/*.tfstate"
       - "**/*.tfstate.*"
       - "**/*.tfplan"
   noop:
+    report-as-issue: false
+  report-incomplete:
+    create-issue: false
+  missing-tool:
+    create-issue: false
+  missing-data:
+    create-issue: false
+  report-failure-as-issue: false
+  report-failed-jobs: false
+  threat-detection:
+    report-as-issue: false
 ---
 
 # Terraform Dependency Update

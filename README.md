@@ -109,7 +109,7 @@ Create the following repository variable and secrets in the hub repository
 | Secret | `APP_PRIVATE_KEY` | Entire downloaded PEM private key, including BEGIN/END lines, for the App |
 
 Give the GitHub App repository permissions `Contents: Read & write`,
-`Pull requests: Read & write`, `Issues: Read & write` and `Metadata: Read`.
+`Pull requests: Read & write` and `Metadata: Read`.
 Install it in `softwareone-public` using **Only select repositories**, selecting only the target
 repositories and any private module-source repositories that must be readable
 (`Contents: Read` is required for those sources).
@@ -118,6 +118,8 @@ The worker uses gh-aw's native `github-app` authentication for checkout, GitHub 
 outputs, including the safe-output target checkout. gh-aw generates short-lived installation
 tokens at runtime; do not store installation tokens as secrets. Read operations use read-scoped
 tokens, while safe outputs receive the permissions needed to push branches and open PRs.
+App tokens do not request Issue permissions; PR-to-issue fallback and diagnostic issue
+creation are disabled. Diagnostics remain available in Actions logs and run summaries.
 The configured `repositories: ["*"]` means repositories available to this App installation,
 **not all organization repositories**. Keep the private key only in Secrets, never in Variables
 or source code.
@@ -213,7 +215,8 @@ The organization-billed worker is compiled with gh-aw v0.89.21, which supports
 |---------|--------------|
 | `validate_target` job fails | `target_repo` is not listed in `config/targets.json`. |
 | Checkout of the target repository fails | `APP_CLIENT_ID` variable or `APP_PRIVATE_KEY` secret missing/invalid, or the App is not installed on the target with `Contents: Read`. |
+| App token creation fails with `The permissions requested are not granted to this installation` | The compiled workflow requests permissions the App installation does not grant. Keep unused `issues` permissions, PR-to-issue fallback and diagnostic issue creation disabled, then recompile. Verify the App installation grants the Contents and Pull requests permissions listed above. |
 | Copilot inference is denied | Verify the organization's Copilot subscription, centralized CLI billing policy and available budget, and recompile/commit the worker with `copilot-requests: write`. The GitHub App cannot authorize inference. |
 | `terraform init` fails with network errors | A module source points to a host outside the allowed network ecosystems – add it under `network.allowed` and recompile. |
-| PR creation fails / falls back to an issue | The App lacks installation access or required write permissions on the target, or the target base branch differs from this repository's default branch (set `safe-outputs.create-pull-request.base-branch`). |
+| PR creation fails | The App lacks installation access or required write permissions on the target, or the target base branch differs from this repository's default branch (set `safe-outputs.create-pull-request.base-branch`). |
 | Runs cancel each other | Ensure the worker keeps `concurrency.job-discriminator` set to the target repository. |
