@@ -30,6 +30,8 @@ concurrency:
   job-discriminator: ${{ github.event.inputs.target_repo }}
 
 engine: copilot
+#model: claude-sonnet-5 #default
+model: haiku
 
 timeout-minutes: 30
 
