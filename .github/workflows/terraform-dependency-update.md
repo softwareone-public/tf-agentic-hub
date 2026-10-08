@@ -78,6 +78,8 @@ network:
     - defaults
     - github
     - terraform
+    - "registry.terraform.io"
+    - "releases.hashicorp.com"
 
 tools:
   github:
