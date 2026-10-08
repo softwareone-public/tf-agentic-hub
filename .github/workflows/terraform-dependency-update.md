@@ -29,9 +29,9 @@ concurrency:
   group: gh-aw-${{ github.workflow }}-${{ github.event.inputs.target_repo }}
   job-discriminator: ${{ github.event.inputs.target_repo }}
 
-engine: copilot
-#model: claude-sonnet-5 #default
-model: claude-haiku-5.5
+engine:
+  id: copilot
+  model: gpt-5 #default claude-sonnet-5
 
 timeout-minutes: 30
 
