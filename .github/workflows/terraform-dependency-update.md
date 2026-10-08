@@ -31,7 +31,7 @@ concurrency:
 
 engine: copilot
 #model: claude-sonnet-5 #default
-model: haiku
+model: claude-haiku-5.5
 
 timeout-minutes: 30
 
