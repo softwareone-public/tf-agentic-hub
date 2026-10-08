@@ -152,10 +152,16 @@ Record:
    string shown in documentation. Supported source formats:
    - Git: `git::https://github.com/<owner>/<repo>.git//<path>?ref=<tag>` and `github.com/<owner>/<repo>//<path>?ref=<tag>`
    - Terraform Registry: `<namespace>/<name>/<provider>` with a `version` argument
-   - Local paths (`./`, `../`) – ignore, they are always current.
+   - Local paths (`./`, `../`) – resolve each path relative to the directory containing its
+     Terraform file or documentation snippet. If any path component is version-like (`v1`, `v2`,
+     `v1.2`, `v1.2.3`, or the same forms without `v`), inspect sibling directories at that
+     component for other versions. Count a sibling only if the resolved directory exists and
+     contains Terraform module files. Record the current and highest available versions. Do not
+     dismiss versioned local paths as current merely because they are local. Unversioned local paths
+     with no versioned sibling directories are not version-pinned and need no version lookup.
 2. **Terraform configuration** – record `required_version` and committed `.terraform.lock.hcl`
-  files for validation context. Review provider requirements only as part of the shared coding
-  standards; do not resolve their latest versions.
+   files for validation context. Review provider requirements only as part of the shared coding
+   standards; do not resolve their latest versions.
 
 ## Step 2 – Resolve the latest versions
 
@@ -163,13 +169,20 @@ Record:
   and pick the highest non-prerelease semantic version. If the repository has no releases, use
   the highest semantic version tag.
 - **Registry modules**: fetch `https://registry.terraform.io/v1/modules/<namespace>/<name>/<provider>/versions`.
+- **Versioned local modules**: compare the available sibling directory versions found in Step 1.
+  For example, if a source is `../../modules/v1` and `../../modules/v2` exists and contains a
+  Terraform module, treat `v2` as an available module version. Do not use a remote registry lookup
+  for a local module.
 
 If major upgrades are **not** allowed, choose the highest version within the currently referenced
-major version for each module instead.
+major version for each Git, Registry, or versioned local module instead.
 
 A module reference is **outdated** when its pinned version is lower than the version selected above.
+For versioned local modules, the version is encoded in the local source path; update that path to
+the selected sibling directory. A repository containing only local module references is not
+automatically current: inspect versioned local paths before deciding there is nothing to update.
 If no module is outdated and no `fix` action from the coding standards applies, call `noop` with a
-short summary of the module versions you checked and stop.
+short summary of the module versions you checked, including local sibling versions, and stop.
 
 Before changing anything, use the GitHub tools to look for an open pull request in the target
 repository whose title starts with `[terraform-deps]`. If it already proposes exactly the same
@@ -177,12 +190,12 @@ module versions, call `noop` referencing that pull request and stop.
 
 ## Step 3 – Apply the upgrade
 
-1. **Module references** – update every outdated `?ref=` / `version` value in `.tf` files **and**
-   in documentation snippets so code and docs stay in sync. For major upgrades, read the
-   release notes / `CHANGELOG.md` of the upgraded module and adapt renamed, removed or newly
-   required inputs and outputs.
+1. **Module references** – update every outdated `?ref=` / `version` value and every outdated
+   versioned local source path in `.tf` files **and** documentation snippets so code and docs stay
+   in sync. For major upgrades, read the release notes / `CHANGELOG.md` of the upgraded module and
+   adapt renamed, removed or newly required inputs and outputs.
 2. Do not upgrade provider versions. Change provider requirements only when needed for a coding-
-  standards fix, and leave provider selections and `.terraform.lock.hcl` files unchanged.
+   standards fix, and leave provider selections and `.terraform.lock.hcl` files unchanged.
 
 ## Step 4 – Validate
 
@@ -216,8 +229,8 @@ actions in the same change set and collect all findings for the pull request bod
 
 Update the documentation so it reflects the new state:
 
-- `README.md` (root and examples): module usage snippets, `?ref=` / `version` values, and
-  inputs/outputs tables when they changed. If the README
+- `README.md` (root and examples): module usage snippets, `?ref=` / `version` values, versioned
+  local source paths, and inputs/outputs tables when they changed. If the README
   contains `<!-- BEGIN_TF_DOCS -->` / `<!-- END_TF_DOCS -->` markers, keep the markers and update
   the content between them in the same terraform-docs format.
 - `CHANGELOG.md` (only if it exists): add the changes under an `Unreleased` section following the
@@ -231,7 +244,8 @@ pull request with:
 - **Title**: `Update Terraform modules (<n> module reference(s))`
 - **Body**:
   1. **Summary** – one paragraph describing what was updated and why.
-  2. **Module version changes** – table with `Module`, `From`, `To`, `Files`.
+  2. **Module version changes** – table with `Module`, `From`, `To`, `Files`; include local
+     directory version changes as well as Git and Registry versions.
   3. **Breaking changes & migrations** – what was adapted for major upgrades (or "None").
   4. **Validation** – the commands you ran per directory and their result.
   5. **Coding standards review** – the table described in the coding standards section.
