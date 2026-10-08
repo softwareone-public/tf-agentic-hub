@@ -13,6 +13,11 @@ on:
         required: false
         type: boolean
         default: true
+      allow_duplicate_prs:
+        description: "Demo only: allow a new PR even when a matching open or closed PR exists."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -39,6 +44,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ALLOW_MAJOR_UPGRADES: ${{ github.event_name != 'workflow_dispatch' || inputs.allow_major_upgrades }}
+          ALLOW_DUPLICATE_PRS: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_duplicate_prs }}
         run: |
           set -euo pipefail
           jq -r '.repositories[]' config/targets.json | while read -r repo; do
@@ -47,6 +53,7 @@ jobs:
               --repo "${GITHUB_REPOSITORY}" \
               --ref "${GITHUB_REF_NAME}" \
               -f target_repo="${repo}" \
-              -f allow_major_upgrades="${ALLOW_MAJOR_UPGRADES}"
+              -f allow_major_upgrades="${ALLOW_MAJOR_UPGRADES}" \
+              -f allow_duplicate_prs="${ALLOW_DUPLICATE_PRS}"
             echo "- \`${repo}\`" >> "${GITHUB_STEP_SUMMARY}"
           done

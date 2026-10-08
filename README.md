@@ -164,10 +164,12 @@ No recompilation is needed after changing the target list.
 | Run for all targets | `gh workflow run terraform-dependency-orchestrator.yml` |
 | Run for all targets, minor/patch upgrades only | `gh workflow run terraform-dependency-orchestrator.yml -f allow_major_upgrades=false` |
 | Run for a single target | `gh aw run terraform-dependency-update --raw-field target_repo=softwareone-public/tf-azurerm-key-vault` |
+| Demo: allow duplicate PRs for one target | `gh aw run terraform-dependency-update --raw-field target_repo=softwareone-public/tf-azurerm-key-vault --raw-field allow_duplicate_prs=true` |
 | Check status | `gh aw status` |
 | Inspect a run | `gh aw logs terraform-dependency-update` / `gh aw audit <run-id>` |
 
 The orchestrator also runs automatically every Monday at 06:00 UTC.
+Duplicate PRs are disabled by default and only enabled when explicitly requested on a manual run.
 
 Each run produces one of the following outcomes per target repository:
 

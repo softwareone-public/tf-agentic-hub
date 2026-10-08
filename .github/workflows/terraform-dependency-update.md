@@ -17,6 +17,11 @@ on:
         required: false
         type: boolean
         default: true
+      allow_duplicate_prs:
+        description: "Demo only: allow a new PR even when a matching open or closed PR exists."
+        required: false
+        type: boolean
+        default: false
 
 run-name: Terraform dependency update for ${{ github.event.inputs.target_repo }}
 
@@ -141,6 +146,7 @@ The target repository is checked out in the current working directory.
 
 - Target repository: `${{ github.event.inputs.target_repo }}`
 - Major version upgrades allowed: `${{ github.event.inputs.allow_major_upgrades }}`
+- Duplicate PRs allowed (demo only): `${{ github.event.inputs.allow_duplicate_prs }}`
 
 ## Step 1 – Inventory
 
@@ -186,9 +192,13 @@ automatically current: inspect versioned local paths before deciding there is no
 If no module is outdated and no `fix` action from the coding standards applies, call `noop` with a
 short summary of the module versions you checked, including local sibling versions, and stop.
 
-Before changing anything, use the GitHub tools to look for an open pull request in the target
-repository whose title starts with `[terraform-deps]`. If it already proposes exactly the same
-module versions, call `noop` referencing that pull request and stop.
+Before changing anything, check `${{ github.event.inputs.allow_duplicate_prs }}`. When it is `true`,
+skip the existing-PR lookup and continue even if an open or closed pull request with the
+`[terraform-deps]` topic already exists. When it is `false`, use the GitHub tools to look for an
+open pull request in the target repository whose title starts with `[terraform-deps]`; if it
+already proposes exactly the same module versions, call `noop` referencing that pull request and
+stop. This flag only bypasses duplicate-PR suppression; it does not bypass module version checks,
+validation, or the no-changes behavior.
 
 ## Step 3 – Apply the upgrade
 
