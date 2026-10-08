@@ -29,7 +29,7 @@ concurrency:
   group: gh-aw-${{ github.workflow }}-${{ github.event.inputs.target_repo }}
   job-discriminator: ${{ github.event.inputs.target_repo }}
 
-engine: claude-sonnet-5
+engine: copilot
 
 timeout-minutes: 30
 
